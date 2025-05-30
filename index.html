@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ko">
+    <head>
+        <meta charset="UTF-8" />
+        <title>폴더 보기</title>
+        <style>
+            .grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 10px;
+            }
+            .grid img {
+                width: 100%;
+            }
+            textarea {
+                width: 100%;
+                margin-top: 20px;
+                min-height: 100px;
+                overflow: hidden;
+                resize: none;
+                box-sizing: border-box;
+                font-size: 16px;
+                padding: 8px;
+            }
+            button {
+                margin-top: 10px;
+                padding: 10px 20px;
+                background: blue;
+                color: white;
+                border: none;
+                border-radius: 5px;
+            }
+
+            /* 네비게이션 버튼 스타일 */
+            .nav-buttons {
+                margin-top: 20px;
+                display: flex;
+                justify-content: space-between;
+            }
+            .nav-buttons button {
+                padding: 10px 15px;
+                background-color: #4caf50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+            .nav-buttons button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+        </style>
+    </head>
+    <body>
+        <h1 id="folder-name"></h1>
+        <!-- 네비게이션 버튼 -->
+        <div class="nav-buttons">
+            <button id="prev-btn" onclick="navigateFolder('prev')">이전 폴더</button>
+            <button id="next-btn" onclick="navigateFolder('next')">다음 폴더</button>
+        </div>
+
+        <div class="grid" id="image-grid">
+            <!-- 이미지가 여기에 들어감 -->
+        </div>
+
+        <textarea id="note" placeholder="여기에 글을 작성하세요"></textarea>
+        <br />
+        <button id="copy-btn">복사하기</button>
+        <!-- 추가된 복사 버튼 -->
+
+        <script>
+            const server = "";
+            const note = document.getElementById("note");
+            const prevBtn = document.getElementById("prev-btn");
+            const nextBtn = document.getElementById("next-btn");
+            const pathParts = window.location.pathname.split("/");
+            const folder = pathParts[1];
+            // URL 경로에서 폴더 이름 추출
+            document.getElementById("folder-name").textContent = `폴더: ${folder}`;
+
+            function autoResize() {
+                note.style.height = "auto";
+                note.style.height = note.scrollHeight + "px";
+            }
+
+            note.addEventListener("input", () => {
+                autoResize();
+                triggerAutoSave();
+            });
+
+            let prev;
+            let next;
+
+            fetch(`${server}/${folder}/prev`)
+                .then((res) => res.json())
+                .then((r) => {
+                    console.log(r);
+                    prev = r.page;
+                });
+
+            fetch(`${server}/${folder}/next`)
+                .then((res) => res.json())
+                .then((r) => {
+                    console.log(r);
+                    next = r.page;
+                });
+
+            // 이미지 가져오기
+            fetch(`${server}/${folder}/images`)
+                .then((res) => res.json())
+                .then((images) => {
+                    const grid = document.getElementById("image-grid");
+                    images.forEach((img) => {
+                        const dv = document.createElement("div");
+                        const lab = document.createElement("p");
+                        const imgEl = document.createElement("img");
+                        imgEl.src = `/static${server}/${folder}/${img}`;
+                        lab.textContent = img;
+                        dv.appendChild(lab);
+                        dv.appendChild(imgEl);
+                        grid.appendChild(dv);
+                    });
+                });
+
+            // 🔥 자동 저장 관련
+            let saveTimer = null;
+
+            function triggerAutoSave() {
+                if (saveTimer) clearTimeout(saveTimer);
+
+                saveTimer = setTimeout(() => {
+                    saveNote();
+                }, 100); // 입력 후 2초 지나면 저장
+            }
+
+            function saveNote() {
+                const content = note.value;
+
+                fetch("/save", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ folder, content }),
+                })
+                    .then(() => {
+                        console.log("✅ 자동 저장 완료");
+                    })
+                    .catch((err) => {
+                        console.error("❌ 저장 실패", err);
+                    });
+            }
+
+            // 페이지 로드 시 글 불러오기
+            window.addEventListener("load", () => {
+                autoResize();
+
+                fetch(`${server}/${folder}/note`)
+                    .then((res) => (res.ok ? res.text() : ""))
+                    .then((text) => {
+                        note.value = text;
+                        autoResize();
+                    });
+            });
+
+            // 이전/다음 폴더로 이동
+            function navigateFolder(direction) {
+                if (direction === "prev") {
+                    window.location.pathname = `/${prev}`;
+                } else if (direction === "next") {
+                    window.location.pathname = `/${next}`;
+                }
+            }
+
+            const copyBtn = document.getElementById("copy-btn");
+
+            copyBtn.addEventListener("click", () => {
+                navigator.clipboard
+                    .writeText(note.value)
+                    .then(() => {
+                        window.open(`https://cafe.naver.com/ca-fe/cafes/31319729/articles/${folder}?commentFocus=true`, "_blank");
+                    })
+                    .catch((err) => {});
+            });
+        </script>
+    </body>
+</html>
